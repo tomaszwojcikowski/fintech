@@ -7,9 +7,21 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -export([start_pool/0, stop_pool/0]).
--export([query/1, query/2]).
+-export([query/1, query/2, transaction/1]).
 
 -record(state, {conn}).
+
+% API
+query(Query) ->
+    query(Query, []).
+
+query(Query, Params) ->
+    wpool:call(pool_name(), {query, Query, Params}).
+
+transaction(Fun) when is_function(Fun) ->
+    wpool:call(pool_name(), {trans, Fun}).
+
+% internals
 
 start_link() ->
    gen_server:start_link(?MODULE, [], []).
@@ -24,6 +36,9 @@ handle_call(stop, _From, State) ->
 handle_call({query, Query, Params}, _From, State = #state{conn = Conn}) ->
     Reply = mysql:query(Conn, Query, Params),
     {reply, Reply, State};
+handle_call({trans, Fun}, _From, State = #state{conn = Conn}) ->
+    {atomic, Reply} = mysql:transaction(Conn, fun() -> Fun(Conn) end),
+    {reply, Reply, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -37,12 +52,6 @@ handle_info(init, State) ->
 handle_info(_Info, State) -> {noreply, State}.
 terminate(_Reason, _State) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
-query(Query) ->
-    query(Query, []).
-
-query(Query, Params) ->
-    wpool:call(pool_name(), {query, Query, Params}).
 
 pool_name() ->
     fintech_rdmbs.
