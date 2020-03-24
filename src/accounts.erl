@@ -1,6 +1,7 @@
 -module(accounts).
 
--expot([load/1]).
+-export([load/1]).
+-export([to_db/1]).
 
 load(File) ->
     {ok, Bin} = file:read_file(File),
