@@ -6,7 +6,8 @@
   {applications,
    [kernel,
     stdlib,
-    cowboy
+    cowboy,
+    worker_pool
    ]},
   {env,[]},
   {modules, []},

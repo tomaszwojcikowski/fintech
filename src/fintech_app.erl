@@ -21,6 +21,7 @@ start(_StartType, _StartArgs) ->
         [{port, 8080}],
         #{env => #{dispatch => Dispatch}}
         ),    
+    fintech_rdbms:start_pool(),
     fintech_sup:start_link().
 
 stop(_State) ->
