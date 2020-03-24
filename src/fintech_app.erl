@@ -8,6 +8,7 @@
 -behaviour(application).
 
 -export([start/2, stop/1]).
+-export([load_accounts/0]).
 
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
@@ -20,10 +21,13 @@ start(_StartType, _StartArgs) ->
         [{port, 8080}],
         #{env => #{dispatch => Dispatch}}
         ),    
-
     fintech_sup:start_link().
 
 stop(_State) ->
     ok.
 
 %% internal functions
+
+load_accounts() ->
+    {ok, File} = application:get_env(fintech, accounts_file),
+    accounts:load(File).

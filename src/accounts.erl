@@ -1,7 +1,7 @@
 -module(accounts).
 
 -export([load/1]).
--export([to_db/1]).
+-export([get_all_accounts/0]).
 
 -type account_map() :: map().
 
@@ -30,6 +30,12 @@ add_account(Conn, #{<<"id">> := Id, <<"balance">> := Balance} = _Acc)
     Query = <<"INSERT INTO `accounts` (`id`, `balance`) VALUES (?, ?)">>,
     ok = mysql:query(Conn, Query, [Id, Balance]),
     mysql:affected_rows(Conn).
+
+get_all_accounts() ->
+    Conn = get_db_conn(),
+    Query = <<"SELECT `id`, `balance` from `accounts`">>,
+    {ok, _Columns, Accounts} = mysql:query(Conn, Query),
+    Accounts.
 
 get_db_conn() ->
     {ok, Opts} = application:get_env(fintech, mysql),
