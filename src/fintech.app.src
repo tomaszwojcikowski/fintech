@@ -6,7 +6,10 @@
   {applications,
    [kernel,
     stdlib,
-    cowboy
+    cowboy,
+    worker_pool,
+    mnesia,
+    sasl
    ]},
   {env,[]},
   {modules, []},
