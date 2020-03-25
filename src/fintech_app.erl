@@ -31,4 +31,4 @@ stop(_State) ->
 
 load_accounts() ->
     {ok, File} = application:get_env(fintech, accounts_file),
-    accounts:load(File).
+    accounts:load(code:priv_dir(fintech) ++ "/" ++ File).

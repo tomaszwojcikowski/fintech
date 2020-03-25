@@ -5,6 +5,7 @@
 
 -type account_map() :: map().
 
+
 -spec load(file:name_all()) -> ok.
 load(File) ->
     {ok, Bin} = file:read_file(File),
