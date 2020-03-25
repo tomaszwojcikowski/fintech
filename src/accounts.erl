@@ -36,7 +36,9 @@ get_all_accounts() ->
     Conn = get_db_conn(),
     Query = <<"SELECT `id`, `balance` from `accounts`">>,
     {ok, _Columns, Accounts} = mysql:query(Conn, Query),
-    Accounts.
+    lists:foldl(fun([Id, Balance], M) ->
+        maps:put(Id, Balance, M)
+    end, #{}, Accounts).
 
 get_db_conn() ->
     {ok, Opts} = application:get_env(fintech, mysql),

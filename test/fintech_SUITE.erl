@@ -3,6 +3,7 @@
 -compile(export_all).
 
 -include_lib("common_test/include/ct.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 all() ->
     [
@@ -14,7 +15,8 @@ groups() ->
     ].
 
 test_cases() ->
-    [accounts_loaded].
+    [accounts_loaded,
+    transaction_test].
 
 suite() ->
     [{timetrap,{seconds,30}}].
@@ -37,4 +39,21 @@ init_per_testcase(_, Config) ->
 
 accounts_loaded(_C) ->
     Accounts = accounts:get_all_accounts(),
-    3 = length(Accounts).
+    ?assertEqual(3, maps:size(Accounts)).
+
+transaction_test(_) ->
+    [] = transactions:list(),
+    ?assertEqual(2, get_account_balance(<<"a">>)),
+    ?assertEqual(23, get_account_balance(<<"b">>)),
+    {ok, Id} = transactions:apply(<<"b">>, <<"a">>, 10),
+    T = transactions:list(),
+    ?assertMatch([[Id|_]], T),
+    ?assertEqual(12, get_account_balance(<<"a">>)),
+    ?assertEqual(13, get_account_balance(<<"b">>)),
+    ok.
+   
+
+% helpers
+get_account_balance(Id) ->
+    Accounts = accounts:get_all_accounts(),
+    maps:get(Id, Accounts).
