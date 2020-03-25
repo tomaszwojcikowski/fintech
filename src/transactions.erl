@@ -71,3 +71,17 @@ list_pending() ->
         end, [], pending_transactions)
     end),
     List.
+
+check_pending(From, To) ->
+    {atomic, Result} = mnesia:transaction(fun() ->
+        case mnesia:match_object(pending_transactions, #pending_transactions{from = From, _ = '_'}) of
+            [] -> 
+                case mnesia:read(pending_transactions, To) of
+                    [] -> none;
+                    _ -> {pending, To}
+                end;
+            _ -> {pending, From}
+        end
+    end),
+    Result.
+
