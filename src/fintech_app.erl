@@ -22,6 +22,7 @@ start(_StartType, _StartArgs) ->
         #{env => #{dispatch => Dispatch}}
         ),    
     fintech_rdbms:start_pool(),
+    transactions:create_table(),
     fintech_sup:start_link().
 
 stop(_State) ->

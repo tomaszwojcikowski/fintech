@@ -16,7 +16,8 @@ groups() ->
 
 test_cases() ->
     [accounts_loaded,
-    transaction_test].
+    transaction_test,
+    pending_test].
 
 suite() ->
     [{timetrap,{seconds,30}}].
@@ -47,11 +48,17 @@ transaction_test(_) ->
     ?assertEqual(23, get_account_balance(<<"b">>)),
     {ok, Id} = transactions:apply(<<"b">>, <<"a">>, 10),
     T = transactions:list(),
-    ?assertMatch([[Id|_]], T),
+    ?assertMatch([[Id, <<"b">>, <<"a">>, 10|_]], T),
     ?assertEqual(12, get_account_balance(<<"a">>)),
     ?assertEqual(13, get_account_balance(<<"b">>)),
     ok.
    
+pending_test(_) ->
+    ?assertEqual([], transactions:list_pending()),
+    {ok, Id} = transactions:add_pending(<<"a">>, <<"b">>, 10),
+    ?assertMatch([_], transactions:list_pending()),
+    ok = transactions:remove_pending(Id),
+    ?assertMatch([], transactions:list_pending()).
 
 % helpers
 get_account_balance(Id) ->
