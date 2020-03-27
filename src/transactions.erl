@@ -17,7 +17,6 @@
 -type amount() :: non_neg_integer().
 
 -define(TABLE, pending_transactions).
--define(TIMEOUT, timer:seconds(10)).
 
 -record(pending_transactions, {id :: id(), 
                                from :: accounts:id(), 
@@ -108,14 +107,16 @@ remove_pending(_T = #pending_transactions{id = Id}) ->
 
 -spec list_pending() -> [map()].
 list_pending() ->
-    {atomic, List} = mnesia:transaction(fun() -> 
-        mnesia:foldl(fun(T, Acc) ->
-            #pending_transactions{id = Id, from = From, 
-                to = To, amount = Amount, created = Created} = T,
-            [#{id => Id, from => From, to => To, amount => Amount, created => Created} | Acc]
-        end, [], ?TABLE)
-    end),
-    List.
+    List = ets:tab2list(?TABLE),
+    lists:foldl(fun(T, Acc) ->
+        #pending_transactions{id = Id, from = From, 
+            to = To, amount = Amount, created = Created} = T,
+        [#{id => Id, 
+            from => From, 
+            to => To, 
+            amount => Amount, 
+            created => now_to_utc_binary(Created)} | Acc]
+    end, [], List).
 
 -spec set_executing(transaction()) -> ok.
 set_executing(T) ->
@@ -131,8 +132,11 @@ check_executing_to(To) ->
         _ -> executing   
     end.
 
+timeout() ->
+    application:get_env(fintech, transaction_timeout, timer:seconds(10)).
+
 check_timeout(_T = #pending_transactions{created = Created}) ->
-    Timeout = ?TIMEOUT,
+    Timeout = timeout(),
     case timer:now_diff(os:timestamp(), Created) of
         Diff when Diff > 1000 * Timeout ->
             timeout;
@@ -156,3 +160,12 @@ validate(#pending_transactions{from = From, to = To, amount = Amount}) ->
             #{no_account => To}
     end.
 
+    -spec now_to_utc_string(erlang:timestamp()) -> string().
+now_to_utc_string({MegaSecs, Secs, MicroSecs}) ->
+    {{Year, Month, Day}, {Hour, Minute, Second}} =
+        calendar:now_to_universal_time({MegaSecs, Secs, MicroSecs}),
+    lists:flatten(
+      io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w.~6..0wZ",
+                    [Year, Month, Day, Hour, Minute, Second, MicroSecs])).
+now_to_utc_binary(Timestamp) ->
+    list_to_binary(now_to_utc_string(Timestamp)).
