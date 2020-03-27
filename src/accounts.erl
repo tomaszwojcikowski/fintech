@@ -31,8 +31,9 @@ start_link(Id) ->
 
 init([Id]) -> {ok, #{id => Id}}.
 handle_call({transaction, T}, _From, State) ->
-    Response = transactions:apply(T),  
-    {reply, Response, State};
+    {ok, Id} = transactions:apply(T),
+    transactions:remove_pending(Id), 
+    {reply, {ok, Id}, State};
 handle_call(_Request, _From, State) -> {reply, ok, State}.
 handle_cast(_Msg, State) ->  {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.

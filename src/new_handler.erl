@@ -5,10 +5,13 @@
 -export([init/2]).
 
 init(Req0, State) ->
-    %% Default body, replace with required behaviour 
-    %% See https://ninenines.eu/docs/en/cowboy/2.6/guide/handlers/
-   	Req = cowboy_req:reply(200,
+    {ok, Body, Req} = cowboy_req:read_body(Req0),
+    Data = jiffy:decode(Body, [return_maps]),
+    #{<<"from">> := From, <<"to">> := To, <<"amount">> := Amount} = Data,
+    T = transactions:new(From, To, Amount),
+    {ok, Id} = accounts:apply_transaction(From, T),
+    Result = jiffy:encode(#{id => Id}),
+   	Req1 = cowboy_req:reply(200,
         #{<<"content-type">> => <<"text/plain">>},
-        <<"Response body - replace me\n">>,
-        Req0),
-    {ok, Req, State}.
+        Result, Req),
+    {ok, Req1, State}.

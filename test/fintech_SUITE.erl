@@ -19,7 +19,8 @@ groups() ->
 
 http_cases() ->
     [ping_test,
-    empty_list_test].
+    empty_list_test,
+    new_transaction_test].
 
 test_cases() ->
     [accounts_loaded,
@@ -53,6 +54,17 @@ ping_test(_C) ->
 empty_list_test(_C) ->
     {ok, Result} = httpc:request("http://localhost:8080/list"),
     ?assertMatch({{_,200,"OK"},_,"[]"}, Result).
+
+new_transaction_test(_C) ->
+    Data = #{from => <<"b">>, to => <<"a">>, amount => 10},
+    Body = jiffy:encode(Data),
+    Request = {"http://localhost:8080/new", [], "application/json", Body},
+    {ok, Result} = httpc:request(post, Request, [], []),
+    ?assertMatch({{_,200,"OK"},_, _}, Result),
+    {_, _, ResultBody} = Result,
+    ResultData = jiffy:decode(ResultBody, [return_maps]),
+    ?assertMatch(#{<<"id">> := _}, ResultData),
+    ?assertMatch([], transactions:list_pending()).
 
 accounts_loaded(_C) ->
     Accounts = accounts:get_all_accounts(),
