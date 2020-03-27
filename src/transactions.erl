@@ -2,6 +2,7 @@
 
 -export([new/3]).
 -export([apply/1]).
+-export([maybe_apply/1]).
 -export([list/0]).
 -export([create_table/0]).
 -export([add_pending/1]).
@@ -9,11 +10,13 @@
 -export([list_pending/0]).
 -export([set_executing/1]).
 -export([check_executing_to/1]).
+-export([from/1]).
 
 -type id() :: binary().
 -type amount() :: non_neg_integer().
 
 -define(TABLE, pending_transactions).
+-define(TIMEOUT, timer:seconds(10)).
 
 -record(pending_transactions, {id :: id(), 
                                from :: accounts:id(), 
@@ -22,14 +25,23 @@
                                created :: erlang:timestamp(),
                                executing = false :: boolean()}).
 -type transaction() :: #pending_transactions{}.
+-export_type([transaction/0]).
 
-
+-spec new(accounts:id(), accounts:id(), transaction:amount()) -> transaction().
 new(From, To, Amount) ->
     Id = generate_id(),
     #pending_transactions{id = Id, from = From, to = To, 
         amount = Amount, created = os:timestamp()}.
 
--spec apply(transaction()) -> {ok, id()} | {error, executing}.
+-spec maybe_apply(transaction()) -> {ok, id()} | {error, executing}.
+maybe_apply(T = #pending_transactions{}) ->
+    case check_timeout(T) of
+        ok ->
+            apply(T);
+        timeout ->
+            {error, timeout}
+    end.
+
 apply(T = #pending_transactions{}) ->
     case check_executing_to(T) of
         ok ->
@@ -108,3 +120,14 @@ check_executing_to(To) ->
         [] -> ok;
         _ -> executing   
     end.
+
+check_timeout(_T = #pending_transactions{created = Created}) ->
+    Timeout = ?TIMEOUT,
+    case timer:now_diff(os:timestamp(), Created) of
+        Diff when Diff > 1000 * Timeout ->
+            timeout;
+        _ -> ok
+    end.
+
+-spec from(transaction()) -> accounts:id().
+from(#pending_transactions{from = From}) -> From.

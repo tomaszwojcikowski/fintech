@@ -89,7 +89,7 @@ account_transaction_test(_) ->
     ?assertEqual(2, get_account_balance(<<"a">>)),
     ?assertEqual(23, get_account_balance(<<"b">>)),
     T = transactions:new(<<"b">>, <<"a">>, 10),
-    {ok, Id} = accounts:apply_transaction(<<"b">>, T),
+    {ok, Id} = accounts:apply_transaction(T),
     Ts = transactions:list(),
     ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
     ?assertEqual(12, get_account_balance(<<"a">>)),

@@ -1,6 +1,6 @@
 -module(accounts).
 
--export([apply_transaction/2]).
+-export([apply_transaction/1]).
 -export([load/1]).
 -export([get_all_accounts/0]).
 -export([create_table/0]).
@@ -19,10 +19,22 @@
                    pid :: pid() | match_spec(), 
                    node :: node() | match_spec()}).
 
-apply_transaction(From, T) ->
+apply_transaction(T) ->
+    From = transactions:from(T),
     Pid = get_or_create(From),
     transactions:add_pending(T),
-    gen_server:call(Pid, {transaction, T}, timer:seconds(10)).
+    Result = try gen_server:call(Pid, {transaction, T}, timer:seconds(10)) of
+        R -> R
+    catch 
+        error:{timeout, _} = Error ->
+            error_logger:error_msg("transaction timeout ~p: ~p", [T, Error]),
+            {error, timeout};
+        Class:Error ->
+            error_logger:error_msg("transaction error ~p: ~p", [T, {Class,Error}]),
+            {error, Error}
+    end,
+    transactions:remove_pending(T),
+    Result.  
 
 % internals
 
@@ -45,32 +57,19 @@ terminate(_Reason, #{id := Id}) ->
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 safe_execute(T) ->
-    Result = try transactions:apply(T) of
+    Result = try transactions:maybe_apply(T) of
         {ok, Id} ->
-            transactions:remove_pending(T), 
             {ok, Id};
+        {error, timeout} ->
+            {error, timeout};
         {error, executing} ->
-            maybe_retry(T) % todo noreply
+            {error, executing}
     catch 
         _C:E ->
-            transactions:remove_pending(T),
             error_logger:error_msg("error executing transaction [~p]: ~p", [T, E]),
             error
     end,
     Result.
-
-maybe_retry(T) ->
-    case transactions:check_timeout(T) of
-        ok ->
-            retry(T),
-            wait;
-        timeout ->
-            {error, timeout}
-    end.
-
-retry(T) ->
-    Interval = rand:uniform(500),
-    erlang:send_after(Interval, self(), {transaction, T}).
 
 load(File) ->
     {ok, Bin} = file:read_file(File),
