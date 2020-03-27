@@ -20,7 +20,10 @@ groups() ->
 http_cases() ->
     [ping_test,
     empty_list_test,
-    new_transaction_test].
+    new_transaction_test,
+    no_account_test,
+    wrong_amount_test,
+    insufficient_funds].
 
 test_cases() ->
     [accounts_loaded,
@@ -45,6 +48,10 @@ init_per_testcase(_, Config) ->
     fintech_app:load_accounts(),
     Config.
 
+end_per_testcase(_, Config) ->
+    [] = transactions:list_pending(),
+    Config.
+
 % TEST CASES
 
 ping_test(_C) ->
@@ -65,6 +72,36 @@ new_transaction_test(_C) ->
     ResultData = jiffy:decode(ResultBody, [return_maps]),
     ?assertMatch(#{<<"id">> := _}, ResultData),
     ?assertMatch([], transactions:list_pending()).
+
+no_account_test(_) ->
+    Data = #{from => <<"noexist">>, to => <<"a">>, amount => 10},
+    Body = jiffy:encode(Data),
+    Request = {"http://localhost:8080/new", [], "application/json", Body},
+    {ok, Result} = httpc:request(post, Request, [], []),
+    ?assertMatch({{_,400,_},_, _}, Result),
+    {_, _, ResultBody} = Result,
+    ResultData = jiffy:decode(ResultBody, [return_maps]),
+    ?assertMatch(#{<<"validation_error">> := #{<<"no_account">> := <<"noexist">>}}, ResultData).
+
+wrong_amount_test(_) ->
+    Data = #{from => <<"b">>, to => <<"a">>, amount => <<"one">>},
+    Body = jiffy:encode(Data),
+    Request = {"http://localhost:8080/new", [], "application/json", Body},
+    {ok, Result} = httpc:request(post, Request, [], []),
+    ?assertMatch({{_,400,_},_, _}, Result),
+    {_, _, ResultBody} = Result,
+    ResultData = jiffy:decode(ResultBody, [return_maps]),
+    ?assertMatch(#{<<"validation_error">> := #{<<"amount_error">> := <<"one">>}}, ResultData).
+
+insufficient_funds(_) ->
+    Data = #{from => <<"b">>, to => <<"a">>, amount => 1000},
+    Body = jiffy:encode(Data),
+    Request = {"http://localhost:8080/new", [], "application/json", Body},
+    {ok, Result} = httpc:request(post, Request, [], []),
+    ?assertMatch({{_,400,_},_, _}, Result),
+    {_, _, ResultBody} = Result,
+    ResultData = jiffy:decode(ResultBody, [return_maps]),
+    ?assertMatch(#{<<"insuficient_funds">> := true}, ResultData).
 
 accounts_loaded(_C) ->
     Accounts = accounts:get_all_accounts(),

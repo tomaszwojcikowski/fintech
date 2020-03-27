@@ -18,17 +18,24 @@ init(Req0, State) ->
 
 
 handle_new(T) ->
-    % todo validation
-    case accounts:apply_transaction(T) of
-        {ok, Id} ->
-            {200, #{id => Id}};
-        {error, timeout} ->
-            {408, #{timeout => true}};
-        {error, executing} ->
-            retry(T)
+    case transactions:validate(T) of
+        ok ->
+            case accounts:apply_transaction(T) of
+                {ok, Id} ->
+                    {200, #{id => Id}};
+                {error, timeout} ->
+                    {408, #{timeout => true}};
+                {error, executing} ->
+                    retry(T);
+                {error, insuficient_funds} ->
+                    {400, #{insuficient_funds => true}}
+            end;
+        Error ->
+            {400, #{validation_error => Error}}
     end.
 
+
 retry(T) ->
-    Interval = timer:uniform(500),
+    Interval = rand:uniform(500),
     timer:sleep(Interval),
     handle_new(T).

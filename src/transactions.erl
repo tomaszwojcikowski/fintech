@@ -11,6 +11,7 @@
 -export([set_executing/1]).
 -export([check_executing_to/1]).
 -export([from/1]).
+-export([validate/1]).
 
 -type id() :: binary().
 -type amount() :: non_neg_integer().
@@ -33,7 +34,7 @@ new(From, To, Amount) ->
     #pending_transactions{id = Id, from = From, to = To, 
         amount = Amount, created = os:timestamp()}.
 
--spec maybe_apply(transaction()) -> {ok, id()} | {error, executing}.
+-spec maybe_apply(transaction()) -> {ok, id()} | {error, executing} | {error, insuficient_funds}.
 maybe_apply(T = #pending_transactions{}) ->
     case check_timeout(T) of
         ok ->
@@ -50,21 +51,30 @@ apply(T = #pending_transactions{}) ->
                 apply_t(Conn, T)
             end);
         executing ->
-            {error, executing}
+            {error, executing};
+        {error, insuficient_funds} ->
+            {error, insuficient_funds}
     end.
 
 apply_t(Conn, #pending_transactions{id = Id, from = From, to = To, amount = Amount}) ->
-    % substract from From
-    QueryA = <<"UPDATE `accounts` set `balance` = `balance` - ? where `id` = ?">>,
-    % add to To
-    QueryB = <<"UPDATE `accounts` set `balance` = `balance` + ? where `id` = ?">>,
-    ok = mysql:query(Conn, QueryA, [Amount, From]),
-    1 = mysql:affected_rows(Conn),
-    ok = mysql:query(Conn, QueryB, [Amount, To]),
-    1 = mysql:affected_rows(Conn),
-    QueryT = <<"INSERT INTO `transactions` (`id`, `from`, `to`, `amount`) VALUES (?, ?, ?, ?)">>,
-    ok = mysql:query(Conn, QueryT, [Id, From, To, Amount]),
-    {ok, Id}.
+    QueryFunds = <<"SELECT `balance` from `accounts` where `id` = ?">>,
+    {ok,_, [[CurrentAmount]]} = mysql:query(Conn, QueryFunds, [From]),
+    case CurrentAmount >= Amount of
+        false ->
+            {error, insuficient_funds};
+        true ->
+            % substract from From
+            QueryA = <<"UPDATE `accounts` set `balance` = `balance` - ? where `id` = ?">>,
+            % add to To
+            QueryB = <<"UPDATE `accounts` set `balance` = `balance` + ? where `id` = ?">>,
+            ok = mysql:query(Conn, QueryA, [Amount, From]),
+            1 = mysql:affected_rows(Conn),
+            ok = mysql:query(Conn, QueryB, [Amount, To]),
+            1 = mysql:affected_rows(Conn),
+            QueryT = <<"INSERT INTO `transactions` (`id`, `from`, `to`, `amount`) VALUES (?, ?, ?, ?)">>,
+            ok = mysql:query(Conn, QueryT, [Id, From, To, Amount]),
+            {ok, Id}
+    end.
 
 list() ->
     Query = <<"SELECT `id`, `from`, `to`, `amount`, `created_at` from `transactions` ORDER BY `created_at`">>,
@@ -131,3 +141,18 @@ check_timeout(_T = #pending_transactions{created = Created}) ->
 
 -spec from(transaction()) -> accounts:id().
 from(#pending_transactions{from = From}) -> From.
+
+-spec validate(transaction()) -> ok | {amount_error, term()} | {no_account, accounts:id()}.
+validate(#pending_transactions{from = From, to = To, amount = Amount}) ->
+    case {accounts:exists(From), accounts:exists(To)} of
+        {true, true} ->
+            case {is_integer(Amount), Amount > 0} of
+                {true, true} -> ok;
+                _ -> #{amount_error => Amount}
+            end;
+        {false, _} ->
+            #{no_account => From};
+        {_, true} ->
+            #{no_account => To}
+    end.
+

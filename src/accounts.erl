@@ -6,6 +6,7 @@
 -export([create_table/0]).
 -export([get_or_create/1]).
 -export([cleanup/1]).
+-export([exists/1]).
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -63,7 +64,9 @@ safe_execute(T) ->
         {error, timeout} ->
             {error, timeout};
         {error, executing} ->
-            {error, executing}
+            {error, executing};
+        {error,insuficient_funds} ->
+            {error,insuficient_funds}
     catch 
         _C:E ->
             error_logger:error_msg("error executing transaction [~p]: ~p", [T, E]),
@@ -80,8 +83,7 @@ load(File) ->
 
 -spec to_db([account_map()]) -> non_neg_integer().
 to_db(Accounts) ->
-    Conn = get_db_conn(),
-    {atomic, Updated} = mysql:transaction(Conn, fun() ->
+    Updated = fintech_rdbms:transaction(fun(Conn) ->
         lists:foldl(fun(Acc, Updated) ->
         Updated + add_account(Conn, Acc)    
         end, 0, Accounts)     
@@ -97,17 +99,20 @@ add_account(Conn, #{<<"id">> := Id, <<"balance">> := Balance} = _Acc)
     mysql:affected_rows(Conn).
 
 get_all_accounts() ->
-    Conn = get_db_conn(),
     Query = <<"SELECT `id`, `balance` from `accounts`">>,
-    {ok, _Columns, Accounts} = mysql:query(Conn, Query),
+    {ok, _Columns, Accounts} = fintech_rdbms:query(Query),
     lists:foldl(fun([Id, Balance], M) ->
         maps:put(Id, Balance, M)
     end, #{}, Accounts).
 
-get_db_conn() ->
-    {ok, Opts} = application:get_env(fintech, mysql),
-    {ok, Conn} = mysql:start_link(Opts),
-    Conn.
+-spec exists(id()) -> boolean().
+exists(Id) ->
+    Query = <<"SELECT `id`, `balance` from `accounts` where `id` = ?">>,
+    {ok, _Columns, Accounts} = fintech_rdbms:query(Query, [Id]),
+    case Accounts of
+        [] -> false;
+        [_] -> true
+    end.
 
 create_table() ->
     mnesia:create_table(accounts,
