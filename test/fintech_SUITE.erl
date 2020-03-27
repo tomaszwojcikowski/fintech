@@ -24,7 +24,8 @@ http_cases() ->
 test_cases() ->
     [accounts_loaded,
     transaction_test,
-    pending_test].
+    pending_test,
+    account_transaction_test].
 
 suite() ->
     [{timetrap,{seconds,30}}].
@@ -63,6 +64,19 @@ transaction_test(_) ->
     ?assertEqual(23, get_account_balance(<<"b">>)),
     T = transactions:new(<<"b">>, <<"a">>, 10),
     {ok, Id} = transactions:apply(T),
+    Ts = transactions:list(),
+    ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
+    ?assertEqual(12, get_account_balance(<<"a">>)),
+    ?assertEqual(13, get_account_balance(<<"b">>)),
+    ok.
+
+
+account_transaction_test(_) ->
+    [] = transactions:list(),
+    ?assertEqual(2, get_account_balance(<<"a">>)),
+    ?assertEqual(23, get_account_balance(<<"b">>)),
+    T = transactions:new(<<"b">>, <<"a">>, 10),
+    {ok, Id} = accounts:apply_transaction(<<"b">>, T),
     Ts = transactions:list(),
     ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
     ?assertEqual(12, get_account_balance(<<"a">>)),

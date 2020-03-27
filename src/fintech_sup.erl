@@ -23,7 +23,10 @@ init([]) ->
     ChildSpecs = [
         #{id => accounts_sup,
           start => {accounts_sup, start_link, []},
-          type => supervisor}
+          type => supervisor},
+        #{id => fintech_cleaner,
+         start => {fintech_cleaner, start_link, []},
+         type => worker}
     ],
     {ok, {SupFlags, ChildSpecs}}.
 

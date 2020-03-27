@@ -1,9 +1,11 @@
 -module(accounts).
 
+-export([apply_transaction/2]).
 -export([load/1]).
 -export([get_all_accounts/0]).
 -export([create_table/0]).
 -export([get_or_create/1]).
+-export([cleanup/1]).
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -11,7 +13,16 @@
 -type account_map() :: map().
 -type id() :: binary().
 
--record(accounts, {id, pid}).
+-type match_spec() :: '_' | '$1'| '$2'.
+
+-record(accounts, {id :: id() | match_spec(), 
+                   pid :: pid() | match_spec(), 
+                   node :: node() | match_spec()}).
+
+apply_transaction(From, T) ->
+    Pid = get_or_create(From),
+    transactions:add_pending(T),
+    gen_server:call(Pid, {transaction, T}, timer:seconds(10)).
 
 % internals
 
@@ -19,10 +30,10 @@ start_link(Id) ->
    gen_server:start_link(?MODULE, [Id], []).
 
 init([Id]) -> {ok, #{id => Id}}.
+handle_call({transaction, T}, _From, State) ->
+    Response = transactions:apply(T),  
+    {reply, Response, State};
 handle_call(_Request, _From, State) -> {reply, ok, State}.
-handle_cast({transaction, T}, State) ->
-    transaction:apply(T),  
-    {noreply, State};
 handle_cast(_Msg, State) ->  {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.
 terminate(_Reason, #{id := Id}) -> 
@@ -71,7 +82,6 @@ get_db_conn() ->
     {ok, Conn} = mysql:start_link(Opts),
     Conn.
 
-
 create_table() ->
     mnesia:create_table(accounts,
                         [{ram_copies, [node()]},
@@ -90,7 +100,7 @@ get_or_create(Id) ->
             [#accounts{pid = Pid}] -> Pid;
             [] -> 
                 {ok, Pid} = create(Id),
-                mnesia:write(accounts, #accounts{id = Id, pid = Pid}, write),
+                mnesia:write(accounts, #accounts{id = Id, pid = Pid, node = node()}, write),
                 Pid
         end
     end),
@@ -101,4 +111,14 @@ create(Id) ->
                   start => {?MODULE, start_link, [Id]},     
                   restart => temporary},
     supervisor:start_child(accounts_sup, ChildSpec).
-    
+
+cleanup(Node) ->
+    {atomic, ok} = mnesia:transaction(fun() ->
+        Keys = mnesia:select(accounts, [{#accounts{pid = '$1', id = '$2', _ = '_'},
+                                        [{'==', {node, '$1'}, Node}], ['$2']}]),
+        lists:foreach(fun(Key) ->
+                mnesia:delete({accounts, Key})
+        end, Keys),
+        ok  
+    end),
+    ok.

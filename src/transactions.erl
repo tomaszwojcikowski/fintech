@@ -9,12 +9,15 @@
 -export([list_pending/0]).
 
 -record(pending_transactions, {id, from, to, amount, created}).
+-type transaction() :: #pending_transactions{}.
+-type id() :: binary().
 
 new(From, To, Amount) ->
     Id = generate_id(),
     #pending_transactions{id = Id, from = From, to = To, 
         amount = Amount, created = os:timestamp()}.
 
+-spec apply(transaction()) -> {ok, id()}.
 apply(T = #pending_transactions{}) ->
     fintech_rdbms:transaction(fun(Conn) ->
         apply_t(Conn, T)
@@ -31,7 +34,6 @@ apply_t(Conn, #pending_transactions{id = Id, from = From, to = To, amount = Amou
     1 = mysql:affected_rows(Conn),
     QueryT = <<"INSERT INTO `transactions` (`id`, `from`, `to`, `amount`) VALUES (?, ?, ?, ?)">>,
     ok = mysql:query(Conn, QueryT, [Id, From, To, Amount]),
-    remove_pending(Id),
     {ok, Id}.
 
 list() ->
