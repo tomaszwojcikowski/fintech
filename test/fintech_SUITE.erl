@@ -77,6 +77,7 @@ transaction_test(_) ->
     T = transactions:new(<<"b">>, <<"a">>, 10),
     {ok, Id} = transactions:apply(T),
     Ts = transactions:list(),
+    ok = transactions:remove_pending(T),
     ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
     ?assertEqual(12, get_account_balance(<<"a">>)),
     ?assertEqual(13, get_account_balance(<<"b">>)),
@@ -84,7 +85,7 @@ transaction_test(_) ->
 
 
 account_transaction_test(_) ->
-    [] = transactions:list(),
+    ?assertEqual([], transactions:list()),
     ?assertEqual(2, get_account_balance(<<"a">>)),
     ?assertEqual(23, get_account_balance(<<"b">>)),
     T = transactions:new(<<"b">>, <<"a">>, 10),
@@ -93,14 +94,16 @@ account_transaction_test(_) ->
     ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
     ?assertEqual(12, get_account_balance(<<"a">>)),
     ?assertEqual(13, get_account_balance(<<"b">>)),
+    ok = transactions:remove_pending(T),
+    ?assertEqual([], transactions:list_pending()),
     ok.
    
 pending_test(_) ->
     ?assertEqual([], transactions:list_pending()),
     T = transactions:new(<<"b">>, <<"a">>, 10),
     {ok, Id} = transactions:add_pending(T),
-    ?assertMatch([_], transactions:list_pending()),
-    ok = transactions:remove_pending(Id),
+    ?assertMatch([#{id := Id}], transactions:list_pending()),
+    ok = transactions:remove_pending(T),
     ?assertMatch([], transactions:list_pending()).
 
 % helpers

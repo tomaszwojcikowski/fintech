@@ -7,10 +7,22 @@
 -export([add_pending/1]).
 -export([remove_pending/1]).
 -export([list_pending/0]).
+-export([set_executing/1]).
+-export([check_executing_to/1]).
 
--record(pending_transactions, {id, from, to, amount, created}).
--type transaction() :: #pending_transactions{}.
 -type id() :: binary().
+-type amount() :: non_neg_integer().
+
+-define(TABLE, pending_transactions).
+
+-record(pending_transactions, {id :: id(), 
+                               from :: accounts:id(), 
+                               to :: accounts:id(), 
+                               amount :: amount(), 
+                               created :: erlang:timestamp(),
+                               executing = false :: boolean()}).
+-type transaction() :: #pending_transactions{}.
+
 
 new(From, To, Amount) ->
     Id = generate_id(),
@@ -19,6 +31,7 @@ new(From, To, Amount) ->
 
 -spec apply(transaction()) -> {ok, id()}.
 apply(T = #pending_transactions{}) ->
+    set_executing(T),
     fintech_rdbms:transaction(fun(Conn) ->
         apply_t(Conn, T)
     end).
@@ -48,31 +61,45 @@ generate_id() ->
 
 
 create_table() ->
-    mnesia:create_table(pending_transactions,
+    mnesia:create_table(?TABLE,
                         [{ram_copies, [node()]},
                          {type, set},
                          {attributes, record_info(fields, pending_transactions)}]),
-    Result = mnesia:add_table_copy(pending_transactions, node(), ram_copies),
+    Result = mnesia:add_table_copy(?TABLE, node(), ram_copies),
     case Result of
         {atomic, ok} -> ok;
         {aborted,{already_exists,_,_}} -> ok
     end.
 
 add_pending(T = #pending_transactions{id = Id}) ->
-    {atomic, ok} = mnesia:transaction(fun() -> mnesia:write(pending_transactions, T, write) end),
+    {atomic, ok} = mnesia:transaction(fun() -> mnesia:write(?TABLE, T, write) end),
     {ok, Id}.
 
-remove_pending(Id) ->
-    {atomic, ok} = mnesia:transaction(fun() -> mnesia:delete({pending_transactions, Id}) end),
+remove_pending(_T = #pending_transactions{id = Id}) ->
+    {atomic, ok} = mnesia:transaction(fun() -> mnesia:delete({?TABLE, Id}) end),
     ok.
 
+-spec list_pending() -> [map()].
 list_pending() ->
     {atomic, List} = mnesia:transaction(fun() -> 
         mnesia:foldl(fun(T, Acc) ->
             #pending_transactions{id = Id, from = From, 
                 to = To, amount = Amount, created = Created} = T,
             [#{id => Id, from => From, to => To, amount => Amount, created => Created} | Acc]
-        end, [], pending_transactions)
+        end, [], ?TABLE)
     end),
     List.
 
+-spec set_executing(transaction()) -> ok.
+set_executing(T) ->
+    T2 = T#pending_transactions{executing = true},
+    {atomic, ok} = mnesia:transaction(fun() -> mnesia:write(?TABLE, T2, write) end),
+    ok.
+
+-spec check_executing_to(accounts:id()) -> ok | executing.
+check_executing_to(To) ->
+    Ids = mnesia:select(?TABLE, [{#pending_transactions{to = To, id='$1', _='_'}, [], ['$1']}]),
+    case Ids of
+        [] -> ok;
+        _ -> executing   
+    end.

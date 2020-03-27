@@ -30,10 +30,10 @@ start_link(Id) ->
    gen_server:start_link(?MODULE, [Id], []).
 
 init([Id]) -> {ok, #{id => Id}}.
+
 handle_call({transaction, T}, _From, State) ->
-    {ok, Id} = transactions:apply(T),
-    transactions:remove_pending(Id), 
-    {reply, {ok, Id}, State};
+    Result = safe_execute(T), 
+    {reply, Result, State};
 handle_call(_Request, _From, State) -> {reply, ok, State}.
 handle_cast(_Msg, State) ->  {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.
@@ -43,6 +43,17 @@ terminate(_Reason, #{id := Id}) ->
     end),
     ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+safe_execute(T) ->
+    Result = try transactions:apply(T) of
+        {ok, Id} -> {ok, Id}
+    catch 
+        _C:E ->
+            error_logger:error_msg("error executing transaction [~p]: ~p", [T, E]),
+            error
+    end,
+    transactions:remove_pending(T),
+    Result.
 
 -spec load(file:name_all()) -> ok.
 load(File) ->
