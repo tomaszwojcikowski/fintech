@@ -12,16 +12,17 @@
 
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
-            {'_', [{"/", fintech_handler, []}]},
-            {'_', [{"/new", new_handler, []}]},
-            {'_', [{"/list", list_handler, []}]},
-            {'_', [{"/pending", pending_handler, []}]}
+            {'_', [{"/ping", ping_handler, []}, 
+                   {"/list", list_handler, []},
+                   {"/new", new_handler, []},
+                   {"/pending", pending_handler, []}]}
         ]),
     {ok, _} = cowboy:start_clear(my_http_listener,
         [{port, 8080}],
         #{env => #{dispatch => Dispatch}}
         ),    
     fintech_rdbms:start_pool(),
+    accounts:create_table(),
     transactions:create_table(),
     fintech_sup:start_link().
 

@@ -2,25 +2,35 @@
 
 -export([load/1]).
 -export([get_all_accounts/0]).
+-export([create_table/0]).
+-export([get_or_create/1]).
 
--export([start_link/0]).
+-export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -type account_map() :: map().
+-type id() :: binary().
 
+-record(accounts, {id, pid}).
 
 % internals
 
-start_link() ->
-   gen_server:start_link(?MODULE, [], []).
+start_link(Id) ->
+   gen_server:start_link(?MODULE, [Id], []).
 
-init(_Args) -> {ok, #{}}.
+init([Id]) -> {ok, #{id => Id}}.
 handle_call(_Request, _From, State) -> {reply, ok, State}.
+handle_cast({transaction, T}, State) ->
+    transaction:apply(T),  
+    {noreply, State};
 handle_cast(_Msg, State) ->  {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.
-terminate(_Reason, _State) -> ok.
+terminate(_Reason, #{id := Id}) -> 
+    mnesia:transaction(fun() ->
+        mnesia:delete({accounts, Id})
+    end),
+    ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
 
 -spec load(file:name_all()) -> ok.
 load(File) ->
@@ -60,3 +70,35 @@ get_db_conn() ->
     {ok, Opts} = application:get_env(fintech, mysql),
     {ok, Conn} = mysql:start_link(Opts),
     Conn.
+
+
+create_table() ->
+    mnesia:create_table(accounts,
+                        [{ram_copies, [node()]},
+                         {type, set},
+                         {attributes, record_info(fields, accounts)}]),
+    Result = mnesia:add_table_copy(accounts, node(), ram_copies),
+    case Result of
+        {atomic, ok} -> ok;
+        {aborted,{already_exists,_,_}} -> ok
+    end.
+
+-spec get_or_create(id()) -> pid().
+get_or_create(Id) ->
+    {atomic, Pid} = mnesia:transaction(fun() ->
+        case mnesia:read({accounts, Id}) of
+            [#accounts{pid = Pid}] -> Pid;
+            [] -> 
+                {ok, Pid} = create(Id),
+                mnesia:write(accounts, #accounts{id = Id, pid = Pid}, write),
+                Pid
+        end
+    end),
+    Pid.
+
+create(Id) ->
+    ChildSpec = #{id => <<"account_", Id/binary>>,      
+                  start => {?MODULE, start_link, [Id]},     
+                  restart => temporary},
+    supervisor:start_child(accounts_sup, ChildSpec).
+    

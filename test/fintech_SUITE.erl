@@ -7,12 +7,19 @@
 
 all() ->
     [
+     {group, http},
      {group, generic}
     ].
 
 groups() ->
-    [{generic, [], test_cases()}
+    [
+        {generic, [], test_cases()},
+        {http, [], http_cases()}
     ].
+
+http_cases() ->
+    [ping_test,
+    empty_list_test].
 
 test_cases() ->
     [accounts_loaded,
@@ -38,6 +45,14 @@ init_per_testcase(_, Config) ->
 
 % TEST CASES
 
+ping_test(_C) ->
+    {ok, Result} = httpc:request("http://localhost:8080/ping"),
+    ?assertMatch({{_,200,"OK"},_,"pong"}, Result).
+
+empty_list_test(_C) ->
+    {ok, Result} = httpc:request("http://localhost:8080/list"),
+    ?assertMatch({{_,200,"OK"},_,"[]"}, Result).
+
 accounts_loaded(_C) ->
     Accounts = accounts:get_all_accounts(),
     ?assertEqual(3, maps:size(Accounts)).
@@ -46,16 +61,18 @@ transaction_test(_) ->
     [] = transactions:list(),
     ?assertEqual(2, get_account_balance(<<"a">>)),
     ?assertEqual(23, get_account_balance(<<"b">>)),
-    {ok, Id} = transactions:apply(<<"b">>, <<"a">>, 10),
-    T = transactions:list(),
-    ?assertMatch([[Id, <<"b">>, <<"a">>, 10|_]], T),
+    T = transactions:new(<<"b">>, <<"a">>, 10),
+    {ok, Id} = transactions:apply(T),
+    Ts = transactions:list(),
+    ?assertMatch([#{id := Id, from := <<"b">>, to := <<"a">>, amount := 10}], Ts),
     ?assertEqual(12, get_account_balance(<<"a">>)),
     ?assertEqual(13, get_account_balance(<<"b">>)),
     ok.
    
 pending_test(_) ->
     ?assertEqual([], transactions:list_pending()),
-    {ok, Id} = transactions:add_pending(<<"a">>, <<"b">>, 10),
+    T = transactions:new(<<"b">>, <<"a">>, 10),
+    {ok, Id} = transactions:add_pending(T),
     ?assertMatch([_], transactions:list_pending()),
     ok = transactions:remove_pending(Id),
     ?assertMatch([], transactions:list_pending()).
