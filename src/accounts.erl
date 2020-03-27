@@ -46,16 +46,32 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 safe_execute(T) ->
     Result = try transactions:apply(T) of
-        {ok, Id} -> {ok, Id}
+        {ok, Id} ->
+            transactions:remove_pending(T), 
+            {ok, Id};
+        {error, executing} ->
+            maybe_retry(T) % todo noreply
     catch 
         _C:E ->
+            transactions:remove_pending(T),
             error_logger:error_msg("error executing transaction [~p]: ~p", [T, E]),
             error
     end,
-    transactions:remove_pending(T),
     Result.
 
--spec load(file:name_all()) -> ok.
+maybe_retry(T) ->
+    case transactions:check_timeout(T) of
+        ok ->
+            retry(T),
+            wait;
+        timeout ->
+            {error, timeout}
+    end.
+
+retry(T) ->
+    Interval = rand:uniform(500),
+    erlang:send_after(Interval, self(), {transaction, T}).
+
 load(File) ->
     {ok, Bin} = file:read_file(File),
     Accounts = jiffy:decode(Bin, [return_maps]),

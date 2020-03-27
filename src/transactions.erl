@@ -29,12 +29,17 @@ new(From, To, Amount) ->
     #pending_transactions{id = Id, from = From, to = To, 
         amount = Amount, created = os:timestamp()}.
 
--spec apply(transaction()) -> {ok, id()}.
+-spec apply(transaction()) -> {ok, id()} | {error, executing}.
 apply(T = #pending_transactions{}) ->
-    set_executing(T),
-    fintech_rdbms:transaction(fun(Conn) ->
-        apply_t(Conn, T)
-    end).
+    case check_executing_to(T) of
+        ok ->
+            set_executing(T),
+            fintech_rdbms:transaction(fun(Conn) ->
+                apply_t(Conn, T)
+            end);
+        executing ->
+            {error, executing}
+    end.
 
 apply_t(Conn, #pending_transactions{id = Id, from = From, to = To, amount = Amount}) ->
     % substract from From
@@ -98,7 +103,7 @@ set_executing(T) ->
 
 -spec check_executing_to(accounts:id()) -> ok | executing.
 check_executing_to(To) ->
-    Ids = mnesia:select(?TABLE, [{#pending_transactions{to = To, id='$1', _='_'}, [], ['$1']}]),
+    Ids = mnesia:dirty_select(?TABLE, [{#pending_transactions{to = To, id='$1', _='_'}, [], ['$1']}]),
     case Ids of
         [] -> ok;
         _ -> executing   
