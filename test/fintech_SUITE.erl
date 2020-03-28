@@ -26,7 +26,8 @@ http_cases() ->
     wrong_amount_test,
     insufficient_funds,
     timeout_test,
-    pending_http_test].
+    pending_http_test,
+    list_http_test].
 
 test_cases() ->
     [accounts_loaded,
@@ -138,6 +139,17 @@ pending_http_test(_C) ->
     ResultData = jiffy:decode(ResultBody, [return_maps]),
     ?assertMatch([#{<<"id">> := _, <<"amount">> := 10}], ResultData),
     ok = transactions:remove_pending(T).
+
+list_http_test(_C) ->
+    Data = #{from => <<"b">>, to => <<"a">>, amount => 10},
+    Body = jiffy:encode(Data),
+    Request = {"http://localhost:8080/new", [], "application/json", Body},
+    {ok, _} = httpc:request(post, Request, [], []),
+    {ok, Result} = httpc:request("http://localhost:8080/list"),
+    {_, _, ResultBody} = Result,
+    ResultData = jiffy:decode(ResultBody, [return_maps]),
+    ?assertMatch([#{<<"id">> := _, <<"amount">> := 10}], ResultData).
+   
 
 % unit like tests
 

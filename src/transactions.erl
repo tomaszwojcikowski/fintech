@@ -85,7 +85,7 @@ list() ->
     {ok, _, Ts} = fintech_rdbms:query(Query),
     lists:map(fun ([Id, From, To, Amount, Created]) ->
 		      #{id => Id, from => From, to => To, amount => Amount,
-			created_at => Created}
+			created_at => now_to_utc_string(Created)}
 	      end,
 	      Ts).
 
@@ -188,13 +188,12 @@ validate(#pending_transactions{from = From, to = To,
 -spec now_to_utc_string(erlang:timestamp()) -> string().
 
 now_to_utc_string({MegaSecs, Secs, MicroSecs}) ->
-    {{Year, Month, Day}, {Hour, Minute, Second}} =
-	calendar:now_to_universal_time({MegaSecs, Secs,
-					MicroSecs}),
-    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0w.~6."
-				".0wZ",
-				[Year, Month, Day, Hour, Minute, Second,
-				 MicroSecs])).
+    {{Year, Month, Day}, {Hour, Minute, Second}} = 
+        calendar:now_to_universal_time({MegaSecs, Secs,MicroSecs}),
+now_to_utc_string({{Year, Month, Day}, {Hour, Minute, Second}});
+now_to_utc_string({{Year, Month, Day}, {Hour, Minute, Second}}) ->
+    lists:flatten(io_lib:format("~4..0w-~2..0w-~2..0wT~2..0w:~2..0w:~2..0wZ",
+				[Year, Month, Day, Hour, Minute, Second])).
 
 now_to_utc_binary(Timestamp) ->
     list_to_binary(now_to_utc_string(Timestamp)).
