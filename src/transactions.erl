@@ -12,6 +12,7 @@
 -export([check_executing_to/1]).
 -export([from/1]).
 -export([validate/1]).
+-export([apply_t/2]).
 
 -type id() :: binary().
 -type amount() :: non_neg_integer().
@@ -47,7 +48,7 @@ apply(T = #pending_transactions{}) ->
         ok ->
             set_executing(T),
             fintech_rdbms:transaction(fun(Conn) ->
-                apply_t(Conn, T)
+                transactions:apply_t(Conn, T)
             end);
         executing ->
             {error, executing};

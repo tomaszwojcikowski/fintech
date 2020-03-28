@@ -7,8 +7,8 @@
 
 all() ->
     [
-     {group, http}
-    %  {group, generic}
+     {group, http},
+     {group, generic}
     ].
 
 groups() ->
@@ -19,13 +19,13 @@ groups() ->
 
 http_cases() ->
     [
-% ping_test,
-%     empty_list_test,
-%     new_transaction_test,
-%     no_account_test,
-%     wrong_amount_test,
-%     insufficient_funds,
-%     timeout_test,
+    ping_test,
+    empty_list_test,
+    new_transaction_test,
+    no_account_test,
+    wrong_amount_test,
+    insufficient_funds,
+    timeout_test,
     pending_http_test].
 
 test_cases() ->
@@ -45,13 +45,6 @@ end_per_suite(_Config) ->
     application:stop(fintech),
     ok.
 
-init_per_testcase(pending_http_test, Config) ->
-    meck:new(transactions, [passthrough]),
-    meck:expect(transactions, maybe_apply, fun(T) ->
-        timer:sleep(1000),
-        meck:passthrough([T])
-    end),
-    Config;
 init_per_testcase(timeout_test, Config) ->
     init(),
     application:set_env(fintech, transaction_timeout, 0),
@@ -60,7 +53,7 @@ init_per_testcase(_, Config) ->
     init(),
     Config.
 
-end_per_testcase(pending_http_test, Config) ->
+end_per_testcase(executing_test, Config) ->
     meck:unload(),
     Config;
 end_per_testcase(timeout_test, Config) ->
@@ -137,16 +130,14 @@ timeout_test(_) ->
     ?assertMatch(#{<<"timeout">> := true}, ResultData).
 
 pending_http_test(_C) ->
-    Data = #{from => <<"b">>, to => <<"a">>, amount => 10},
-    Body = jiffy:encode(Data),
-    Request = {"http://localhost:8080/new", [], "application/json", Body},
-    spawn_link(httpc, request, [post, Request, [], []]),
-    timer:sleep(500),
+    T = transactions:new(<<"b">>, <<"a">>, 10),
+    {ok, Id} = transactions:add_pending(T),
     {ok, Result} = httpc:request("http://localhost:8080/pending"),
     ?assertMatch({{_,200,"OK"},_, _}, Result),
     {_, _, ResultBody} = Result,
     ResultData = jiffy:decode(ResultBody, [return_maps]),
-    ?assertMatch([#{<<"id">> := _, <<"amount">> := 10}], ResultData).
+    ?assertMatch([#{<<"id">> := _, <<"amount">> := 10}], ResultData),
+    ok = transactions:remove_pending(T).
 
 % unit like tests
 
