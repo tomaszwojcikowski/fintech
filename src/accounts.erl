@@ -1,20 +1,8 @@
 -module(accounts).
 
--export([apply_transaction/1]).
-
--export([load/1]).
-
--export([get_all_accounts/0]).
-
--export([create_table/0]).
-
--export([get_or_create/1]).
-
--export([cleanup/1]).
-
--export([exists/1]).
-
--export([start_link/1]).
+-export([apply_transaction/1, cleanup/1, create_table/0,
+	 exists/1, get_all_accounts/0, get_or_create/1, load/1,
+	 start_link/1]).
 
 -export([code_change/3, handle_call/3, handle_cast/2,
 	 handle_info/2, init/1, terminate/2]).

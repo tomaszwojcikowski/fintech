@@ -1,30 +1,9 @@
 -module(transactions).
 
--export([new/3]).
-
--export([apply/1]).
-
--export([maybe_apply/1]).
-
--export([list/0]).
-
--export([create_table/0]).
-
--export([add_pending/1]).
-
--export([remove_pending/1]).
-
--export([list_pending/0]).
-
--export([set_executing/1]).
-
--export([check_executing_to/1]).
-
--export([from/1]).
-
--export([validate/1]).
-
--export([apply_t/2]).
+-export([add_pending/1, apply/1, apply_t/2,
+	 check_executing_to/1, create_table/0, from/1, list/0,
+	 list_pending/0, maybe_apply/1, new/3, remove_pending/1,
+	 set_executing/1, validate/1]).
 
 -type id() :: binary().
 
