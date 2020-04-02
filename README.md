@@ -6,14 +6,18 @@ A Cowboy OTP application
 Build
 -----
 
-    `$ rebar3 compile`
-    `$ rebar3 rel`
+```
+$ rebar3 compile
+$ rebar3 rel
+```
 
 Test
 -----
 
-    `$ make mysql`
-    `$ rebar3 ct`
+```
+$ make mysql`
+$ rebar3 ct
+```
 
 Options
 -----
